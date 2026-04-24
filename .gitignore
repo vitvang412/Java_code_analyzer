@@ -1,0 +1,39 @@
+# ============================================================
+# Java Code Analyzer - .gitignore
+# ============================================================
+
+# ----- Sensitive configuration (NEVER commit API keys!) -----
+src/main/resources/config.properties
+
+# ----- Maven build output -----
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# ----- IDE files -----
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/settings.json
+*.eclipse
+.classpath
+.project
+.settings/
+
+# ----- OS generated -----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Logs -----
+*.log
+logs/
+
+# ----- Chrome driver cache -----
+.wdm/
+
+# ----- Backup -----
+Analyze-backup/

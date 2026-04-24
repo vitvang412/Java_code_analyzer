@@ -9,49 +9,66 @@ import java.awt.*;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Thanh trạng thái ở chân cửa sổ: hiển thị thông điệp chung + trạng thái scheduler.
- * Tự cập nhật mỗi 5 giây.
+ * Bottom status bar – shows system status and scheduler state.
+ * Auto-refreshes every 5 seconds.
  */
 public class StatusBar extends JPanel {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("HH:mm dd/MM");
 
-    private final JLabel leftLabel  = new JLabel("Hệ thống đã sẵn sàng.");
+    private final JLabel leftLabel  = new JLabel("System ready.");
     private final JLabel rightLabel = new JLabel();
+    private final JPanel dot        = new JPanel();
 
     public StatusBar() {
-        setLayout(new BorderLayout());
-        setBackground(new Color(0xECEFF1));
-        setBorder(new EmptyBorder(4, 10, 4, 10));
+        setLayout(new BorderLayout(8, 0));
+        setBackground(UIConstants.PRIMARY_DARK);
+        setBorder(new EmptyBorder(4, 12, 4, 12));
         setPreferredSize(new Dimension(0, 28));
 
         leftLabel.setFont(UIConstants.SMALL);
-        leftLabel.setForeground(UIConstants.TEXT_MUTED);
+        leftLabel.setForeground(new Color(0xB0BEC5));
+
         rightLabel.setFont(UIConstants.SMALL);
-        rightLabel.setForeground(UIConstants.TEXT_MUTED);
+        rightLabel.setForeground(new Color(0xB0BEC5));
         rightLabel.setHorizontalAlignment(SwingConstants.RIGHT);
 
-        add(leftLabel,  BorderLayout.WEST);
+        // Indicator dot
+        dot.setPreferredSize(new Dimension(8, 8));
+        dot.setMaximumSize(new Dimension(8, 8));
+        dot.setBorder(BorderFactory.createEmptyBorder());
+        dot.setOpaque(true);
+
+        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        left.setOpaque(false);
+        left.add(dot);
+        left.add(leftLabel);
+
+        add(left, BorderLayout.WEST);
         add(rightLabel, BorderLayout.EAST);
 
         new Timer(5000, e -> refreshSchedulerInfo()).start();
         refreshSchedulerInfo();
     }
 
-    public void setMessage(String msg) { leftLabel.setText(msg); }
+    public void setMessage(String msg) {
+        SwingUtilities.invokeLater(() -> leftLabel.setText(msg));
+    }
 
     private void refreshSchedulerInfo() {
         CrawlScheduler s = CrawlScheduler.getInstance();
         StringBuilder sb = new StringBuilder();
         if (s.isRunning()) {
-            sb.append("⏱ Lịch: ON (").append(s.getIntervalHours()).append("h)");
+            dot.setBackground(new Color(0x00E676));  // green
+            sb.append("Scheduler ON  (").append(s.getIntervalHours()).append("h)");
             if (s.getNextRunAt() != null) {
-                sb.append("  |  Kế: ").append(s.getNextRunAt().format(FMT));
+                sb.append("   Next: ").append(s.getNextRunAt().format(FMT));
             }
         } else {
-            sb.append("⏱ Lịch: OFF");
+            dot.setBackground(new Color(0xEF9A9A));  // soft red
+            sb.append("Scheduler OFF");
         }
-        if (s.isJobActive()) sb.append("  |  Đang chạy...");
+        if (s.isJobActive()) sb.append("   |   Running...");
         rightLabel.setText(sb.toString());
     }
 }

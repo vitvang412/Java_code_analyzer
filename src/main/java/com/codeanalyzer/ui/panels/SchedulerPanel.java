@@ -11,146 +11,144 @@ import java.awt.*;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Panel điều khiển lịch crawl + phân tích + đánh giá tự động.
- *
- *  - Spinner chọn chu kỳ (giờ) [1..168]
- *  - Nút Bật / Tắt / Chạy ngay
- *  - Log realtime qua listener của CrawlScheduler
- *  - Hiển thị trạng thái: đang bật?, lần cuối, lần kế tiếp
+ * Panel for controlling the automated Crawl -> AI Analysis -> Evaluate scheduler.
  */
 public class SchedulerPanel extends JPanel {
 
-    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("HH:mm:ss dd/MM/yyyy");
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("HH:mm:ss  dd/MM/yyyy");
 
     private final CrawlScheduler scheduler = CrawlScheduler.getInstance();
 
     private final JSpinner spinInterval = new JSpinner(
             new SpinnerNumberModel(AppConfig.getInstance().crawlerScheduleHours(), 1, 24 * 7, 1));
-    private final JLabel lblStatus   = new JLabel();
-    private final JLabel lblLastRun  = new JLabel();
-    private final JLabel lblNextRun  = new JLabel();
-    private final JTextArea logArea  = new JTextArea();
 
-    private final StyledButton btnStart = new StyledButton("▶  Bật lịch",   StyledButton.Variant.SUCCESS);
-    private final StyledButton btnStop  = new StyledButton("⏹  Tắt lịch",   StyledButton.Variant.DANGER);
-    private final StyledButton btnRun   = new StyledButton("⚡  Chạy ngay", StyledButton.Variant.ACCENT);
-    private final StyledButton btnClear = new StyledButton("🗑  Xoá log",   StyledButton.Variant.NEUTRAL);
+    private final JLabel lblStatus  = new JLabel();
+    private final JLabel lblLastRun = new JLabel();
+    private final JLabel lblNextRun = new JLabel();
+    private final JTextArea logArea = new JTextArea();
+
+    private final StyledButton btnStart = new StyledButton("Start Scheduler", StyledButton.Variant.SUCCESS);
+    private final StyledButton btnStop  = new StyledButton("Stop Scheduler",  StyledButton.Variant.DANGER);
+    private final StyledButton btnRun   = new StyledButton("Run Now",         StyledButton.Variant.ACCENT);
+    private final StyledButton btnClear = new StyledButton("Clear Log",       StyledButton.Variant.NEUTRAL);
 
     public SchedulerPanel() {
-        setLayout(new BorderLayout(12, 12));
-        setBorder(new EmptyBorder(UIConstants.BIG_PADDING, UIConstants.BIG_PADDING,
-                                  UIConstants.BIG_PADDING, UIConstants.BIG_PADDING));
+        setLayout(new BorderLayout(0, 12));
         setBackground(UIConstants.BACKGROUND);
+        setBorder(new EmptyBorder(16, 18, 16, 18));
 
-        add(buildTopCard(),    BorderLayout.NORTH);
-        add(buildLogCard(),    BorderLayout.CENTER);
+        add(buildControlCard(), BorderLayout.NORTH);
+        add(buildLogCard(),     BorderLayout.CENTER);
 
         scheduler.setListener(this::appendLog);
-
         wireActions();
         refreshStatus();
         new Timer(2000, e -> refreshStatus()).start();
     }
 
-    // ── UI builders ───────────────────────────────────────────────────────
+    // ── Control card ──────────────────────────────────────────────────────────
 
-    private JPanel buildTopCard() {
-        JPanel card = card();
-        card.setLayout(new BorderLayout(10, 10));
+    private JPanel buildControlCard() {
+        JPanel card = new JPanel(new BorderLayout(16, 12));
+        card.setBackground(UIConstants.CARD_BG);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(UIConstants.BORDER),
+                new EmptyBorder(18, 20, 18, 20)));
 
-        // ── Dòng điều khiển ──────────────────────────────────────────────
-        JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
+        // Title row
+        JLabel title = new JLabel("Automatic Scheduler");
+        title.setFont(UIConstants.SUBHEADER);
+        title.setForeground(UIConstants.PRIMARY_DARK);
+
+        JLabel desc = new JLabel("<html><span style='color:#546E7A'>"
+                + "When enabled, the system automatically runs <b>Crawl &rarr; AI Analysis &rarr; Evaluate</b> "
+                + "for all active accounts on the configured interval.<br>"
+                + "The crawler uses Selenium (semi-auto), so handle any Cloudflare challenge in the browser window.</span></html>");
+        desc.setFont(UIConstants.SMALL);
+
+        JPanel titleBlock = new JPanel(new BorderLayout(0, 6));
+        titleBlock.setOpaque(false);
+        titleBlock.add(title, BorderLayout.NORTH);
+        titleBlock.add(desc,  BorderLayout.CENTER);
+
+        // Controls row
+        JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         controls.setOpaque(false);
+        controls.setBorder(new EmptyBorder(10, 0, 0, 0));
 
-        JLabel lbl = new JLabel("Chu kỳ (giờ):");
-        lbl.setFont(UIConstants.SUBHEADER);
-        controls.add(lbl);
+        JLabel lbl = new JLabel("Interval (hours):");
+        lbl.setFont(UIConstants.SMALL_BOLD);
+        lbl.setForeground(UIConstants.TEXT_SECONDARY);
 
-        ((JSpinner.DefaultEditor) spinInterval.getEditor())
-                .getTextField().setColumns(4);
+        ((JSpinner.DefaultEditor) spinInterval.getEditor()).getTextField().setColumns(4);
         spinInterval.setFont(UIConstants.MAIN);
-        controls.add(spinInterval);
 
+        controls.add(lbl);
+        controls.add(spinInterval);
         controls.add(Box.createHorizontalStrut(16));
         controls.add(btnStart);
         controls.add(btnStop);
         controls.add(btnRun);
 
-        // ── Thông tin trạng thái ────────────────────────────────────────
-        JPanel statusPane = new JPanel(new GridLayout(3, 1, 0, 4));
-        statusPane.setOpaque(false);
-        statusPane.setBorder(new EmptyBorder(4, 4, 0, 4));
+        // Status row
+        JPanel statusGrid = new JPanel(new GridLayout(3, 1, 0, 4));
+        statusGrid.setOpaque(false);
+        statusGrid.setBorder(new EmptyBorder(12, 0, 0, 0));
 
         for (JLabel l : new JLabel[]{lblStatus, lblLastRun, lblNextRun}) {
             l.setFont(UIConstants.MAIN);
-            l.setForeground(UIConstants.TEXT);
+            l.setForeground(UIConstants.TEXT_SECONDARY);
+            statusGrid.add(l);
         }
-        statusPane.add(lblStatus);
-        statusPane.add(lblLastRun);
-        statusPane.add(lblNextRun);
 
-        JLabel header = new JLabel("⏰  Lập Lịch Tự Động");
-        header.setFont(UIConstants.HEADER.deriveFont(18f));
-        header.setForeground(UIConstants.PRIMARY_DARK);
-        header.setBorder(new EmptyBorder(0, 0, 8, 0));
+        JPanel content = new JPanel(new BorderLayout(0, 0));
+        content.setOpaque(false);
+        content.add(titleBlock,  BorderLayout.NORTH);
+        content.add(controls,    BorderLayout.CENTER);
+        content.add(statusGrid,  BorderLayout.SOUTH);
 
-        JPanel top = new JPanel(new BorderLayout());
-        top.setOpaque(false);
-        top.add(header,   BorderLayout.NORTH);
-        top.add(controls, BorderLayout.CENTER);
-        top.add(statusPane, BorderLayout.SOUTH);
-
-        card.add(top, BorderLayout.CENTER);
-
-        // Mô tả ngắn
-        JLabel desc = new JLabel(
-                "<html><span style='color:#555'>Khi bật, hệ thống sẽ tự động thực hiện chu trình "
-                + "<b>Crawl → Phân tích AI → Đánh giá</b> cho tất cả nick đang hoạt động. "
-                + "Crawl dùng Selenium semi-auto nên cần bạn xử lý Cloudflare nếu có.</span></html>");
-        desc.setFont(UIConstants.SMALL);
-        desc.setBorder(new EmptyBorder(6, 0, 0, 0));
-        card.add(desc, BorderLayout.SOUTH);
-
+        card.add(content, BorderLayout.CENTER);
         return card;
     }
 
+    // ── Log card ──────────────────────────────────────────────────────────────
+
     private JPanel buildLogCard() {
-        JPanel card = card();
-        card.setLayout(new BorderLayout(6, 6));
-
-        JLabel header = new JLabel("📜  Log hoạt động");
-        header.setFont(UIConstants.SUBHEADER);
-        header.setForeground(UIConstants.PRIMARY_DARK);
-
-        JPanel headerRow = new JPanel(new BorderLayout());
-        headerRow.setOpaque(false);
-        headerRow.add(header, BorderLayout.WEST);
-        headerRow.add(btnClear, BorderLayout.EAST);
-
         logArea.setEditable(false);
         logArea.setFont(UIConstants.MONO);
         logArea.setBackground(UIConstants.CONSOLE_BG);
         logArea.setForeground(UIConstants.CONSOLE_FG);
-        logArea.setCaretColor(Color.WHITE);
+        logArea.setCaretColor(UIConstants.ACCENT_LIGHT);
+        logArea.setBorder(new EmptyBorder(8, 12, 8, 12));
 
         JScrollPane sp = new JScrollPane(logArea);
-        sp.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER));
+        sp.setBorder(BorderFactory.createEmptyBorder());
 
-        card.add(headerRow, BorderLayout.NORTH);
-        card.add(sp,        BorderLayout.CENTER);
-        return card;
+        JLabel header = new JLabel("  Activity Log");
+        header.setFont(UIConstants.SMALL_BOLD);
+        header.setForeground(UIConstants.CONSOLE_FG);
+        header.setBackground(new Color(0x0D1228));
+        header.setOpaque(true);
+        header.setPreferredSize(new Dimension(0, 26));
+
+        JPanel headerRow = new JPanel(new BorderLayout());
+        headerRow.setOpaque(false);
+        headerRow.add(header, BorderLayout.CENTER);
+        headerRow.add(btnClear, BorderLayout.EAST);
+
+        JPanel inner = new JPanel(new BorderLayout());
+        inner.setBackground(UIConstants.CONSOLE_BG);
+        inner.add(headerRow, BorderLayout.NORTH);
+        inner.add(sp,         BorderLayout.CENTER);
+        inner.setBorder(BorderFactory.createLineBorder(new Color(0x1A2A4A)));
+
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.setOpaque(false);
+        wrap.add(inner, BorderLayout.CENTER);
+        return wrap;
     }
 
-    private JPanel card() {
-        JPanel c = new JPanel();
-        c.setBackground(UIConstants.CARD_BG);
-        c.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(UIConstants.BORDER),
-                new EmptyBorder(14, 16, 14, 16)));
-        return c;
-    }
-
-    // ── Actions ───────────────────────────────────────────────────────────
+    // ── Actions ───────────────────────────────────────────────────────────────
 
     private void wireActions() {
         btnStart.addActionListener(e -> {
@@ -160,7 +158,7 @@ public class SchedulerPanel extends JPanel {
         });
         btnStop.addActionListener(e -> { scheduler.stop(); refreshStatus(); });
         btnRun.addActionListener(e -> {
-            appendLog("▶ Yêu cầu chạy ngay 1 chu trình...");
+            appendLog("[MANUAL] Triggering one-shot run...");
             scheduler.runNow();
         });
         btnClear.addActionListener(e -> logArea.setText(""));
@@ -168,13 +166,18 @@ public class SchedulerPanel extends JPanel {
 
     private void refreshStatus() {
         boolean on = scheduler.isRunning();
-        lblStatus.setText("Trạng thái: "
-                + (on ? "🟢 ĐANG BẬT  (chu kỳ " + scheduler.getIntervalHours() + "h)" : "🔴 TẮT")
-                + (scheduler.isJobActive() ? "  –  đang chạy chu trình..." : ""));
+        boolean active = scheduler.isJobActive();
 
-        lblLastRun.setText("Lần chạy gần nhất: "
+        String statusText = on
+                ? "<html><b style='color:#00897B'>RUNNING</b>  (every " + scheduler.getIntervalHours() + " h)"
+                  + (active ? "  &mdash;  <i>job in progress...</i>" : "")
+                  + "</html>"
+                : "<html><b style='color:#C62828'>STOPPED</b></html>";
+        lblStatus.setText("Status: " + statusText);
+
+        lblLastRun.setText("Last run:  "
                 + (scheduler.getLastRunAt() == null ? "—" : scheduler.getLastRunAt().format(FMT)));
-        lblNextRun.setText("Lần chạy kế tiếp:  "
+        lblNextRun.setText("Next run:  "
                 + (!on || scheduler.getNextRunAt() == null ? "—" : scheduler.getNextRunAt().format(FMT)));
 
         btnStart.setEnabled(!on);
