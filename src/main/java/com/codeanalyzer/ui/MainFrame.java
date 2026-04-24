@@ -35,13 +35,13 @@ public class MainFrame extends JFrame {
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // Gradient: deep indigo → primary indigo
+                // Gradient: deep slate → lighter slate
                 GradientPaint gp = new GradientPaint(
                         0, 0, UIConstants.PRIMARY_DARK,
-                        getWidth(), 0, UIConstants.PRIMARY_LIGHT);
+                        getWidth(), 0, UIConstants.PRIMARY);
                 g2.setPaint(gp);
                 g2.fillRect(0, 0, getWidth(), getHeight());
-                // Bottom accent line (cyan)
+                // Bottom accent line (violet)
                 g2.setColor(UIConstants.ACCENT);
                 g2.fillRect(0, getHeight() - 3, getWidth(), 3);
                 g2.dispose();
@@ -122,7 +122,7 @@ public class MainFrame extends JFrame {
                 if (isSelected) {
                     g2.setColor(UIConstants.CARD_BG);
                 } else {
-                    g2.setColor(new Color(0xDDE3EB));
+                    g2.setColor(new Color(0xE2E8F0));
                 }
                 g2.fillRect(x, y, w, h);
                 if (isSelected) {

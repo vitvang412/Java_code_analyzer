@@ -57,8 +57,12 @@ public class GeminiService {
         // Generation config: conservative temperature, enough tokens for JSON output
         JsonObject genConfig = new JsonObject();
         genConfig.addProperty("temperature", 0.2);
+        
+        // Use camelCase as required by Gson mapping, but remove responseMimeType 
+        // because it is not strictly supported in all v1 model versions or requires 
+        // a specific response_schema to be present.
         genConfig.addProperty("maxOutputTokens", 2048);
-        genConfig.addProperty("responseMimeType", "text/plain");
+        
         requestBody.add("generationConfig", genConfig);
 
         String responseJson = HttpUtil.post(url, requestBody.toString());

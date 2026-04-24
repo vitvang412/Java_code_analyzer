@@ -44,30 +44,49 @@ public class CodeAnalyzer {
               - "summary": 1-2 câu tiếng Việt tóm tắt hướng giải.
             """.formatted(submission.getLanguage(), submission.getSourceCode());
 
-        try {
-            String jsonResponse = geminiService.generate(prompt);
+        int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String jsonResponse = geminiService.generate(prompt);
 
-            // Loại bỏ markdown fences nếu Gemini có bao ngoài
-            jsonResponse = jsonResponse.replace("```json", "").replace("```", "").trim();
+                // Loại bỏ markdown fences nếu Gemini có bao ngoài
+                jsonResponse = jsonResponse.replace("```json", "").replace("```", "").trim();
 
-            JsonObject resultJson = JsonUtil.parseObject(jsonResponse);
+                JsonObject resultJson = JsonUtil.parseObject(jsonResponse);
 
-            AnalysisResult result = new AnalysisResult();
-            result.setSubmissionId(submission.getId());
-            result.setDataStructures(JsonUtil.toJson(resultJson.get("data_structures")));
-            result.setAlgorithms(JsonUtil.toJson(resultJson.get("algorithms")));
-            result.setAiUsageScore(JsonUtil.getInt(resultJson, "ai_usage_score", 0));
-            result.setAiUsageReason(JsonUtil.getString(resultJson, "ai_usage_reason"));
-            result.setComplexityEstimate(JsonUtil.getString(resultJson, "complexity_estimate"));
-            result.setSummary(JsonUtil.getString(resultJson, "summary"));
+                AnalysisResult result = new AnalysisResult();
+                result.setSubmissionId(submission.getId());
+                result.setDataStructures(JsonUtil.toJson(resultJson.get("data_structures")));
+                result.setAlgorithms(JsonUtil.toJson(resultJson.get("algorithms")));
+                result.setAiUsageScore(JsonUtil.getInt(resultJson, "ai_usage_score", 0));
+                result.setAiUsageReason(JsonUtil.getString(resultJson, "ai_usage_reason"));
+                result.setComplexityEstimate(JsonUtil.getString(resultJson, "complexity_estimate"));
+                result.setSummary(JsonUtil.getString(resultJson, "summary"));
 
-            analysisResultDAO.save(result);
-            System.out.println("[Analyze] ✅ Xong bài ID: " + submission.getId());
-            return result;
+                analysisResultDAO.save(result);
+                System.out.println("[Analyze] ✅ Xong bài ID: " + submission.getId());
+                return result;
 
-        } catch (Exception e) {
-            System.err.println("[Analyze] ❌ Lỗi bài ID " + submission.getId() + ": " + e.getMessage());
-            return null;
+            } catch (Exception e) {
+                String errorMsg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                boolean isTransientError = errorMsg.contains("high demand") 
+                                        || errorMsg.contains("503") 
+                                        || errorMsg.contains("malformedjsonexception")
+                                        || errorMsg.contains("unterminated string")
+                                        || errorMsg.contains("timeout")
+                                        || errorMsg.contains("429");
+
+                if (isTransientError && attempt < maxRetries) {
+                    System.err.println("[Analyze] ⚠ Lỗi tạm thời (Quá tải / Lỗi chuỗi JSON). Đợi 10s rồi thử lại lần " + (attempt + 1) + "...");
+                    try { Thread.sleep(10000); } catch (InterruptedException ignored) {}
+                    continue; // Retry
+                }
+                
+                // Nếu đã hết lượt retry hoặc lỗi nghiêm trọng
+                System.err.println("[Analyze] ❌ Lỗi bài ID " + submission.getId() + ": " + e.getMessage());
+                throw new RuntimeException("Gemini phân tích thất bại: " + e.getMessage(), e);
+            }
         }
+        return null;
     }
 }
