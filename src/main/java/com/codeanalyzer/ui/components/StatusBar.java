@@ -60,7 +60,7 @@ public class StatusBar extends JPanel {
         StringBuilder sb = new StringBuilder();
         if (s.isRunning()) {
             dot.setBackground(new Color(0x00E676));  // green
-            sb.append("Scheduler ON  (").append(s.getIntervalHours()).append("h)");
+            sb.append("Scheduler ON  (").append(s.getIntervalMinutes()).append("m)");
             if (s.getNextRunAt() != null) {
                 sb.append("   Next: ").append(s.getNextRunAt().format(FMT));
             }

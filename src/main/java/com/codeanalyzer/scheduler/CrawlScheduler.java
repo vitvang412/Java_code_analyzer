@@ -18,12 +18,9 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Scheduler chạy định kỳ 1 chu trình "Crawl → Analyze → Evaluate".
+ * Hỗ trợ interval theo PHÚT (tối thiểu 1 phút).
  *
- * Singleton: chỉ có 1 scheduler trong toàn app để UI (SchedulerPanel)
- * và main app chia sẻ cùng trạng thái.
- *
- * Dùng ScheduledExecutorService (single-threaded) để các lần chạy không bao giờ
- * chồng lấn nhau – nếu task chạy lâu hơn chu kỳ, lần kế tiếp sẽ đợi.
+ * Singleton: chỉ có 1 scheduler trong toàn app.
  */
 public class CrawlScheduler {
 
@@ -35,52 +32,48 @@ public class CrawlScheduler {
     private static final CrawlScheduler INSTANCE = new CrawlScheduler();
     public static CrawlScheduler getInstance() { return INSTANCE; }
 
-    private final StudentDAO        studentDAO        = new StudentDAO();
-    private final SubmissionDAO     submissionDAO     = new SubmissionDAO();
-    private final CrawlerService    crawlerService    = new CrawlerService();
-    private final CodeAnalyzer      codeAnalyzer      = new CodeAnalyzer();
-    private final StudentEvaluator  studentEvaluator  = new StudentEvaluator();
+    private final StudentDAO       studentDAO       = new StudentDAO();
+    private final SubmissionDAO    submissionDAO    = new SubmissionDAO();
+    private final CrawlerService   crawlerService   = new CrawlerService();
+    private final CodeAnalyzer     codeAnalyzer     = new CodeAnalyzer();
+    private final StudentEvaluator studentEvaluator = new StudentEvaluator();
 
     private ScheduledExecutorService executor;
-    private ScheduledFuture<?> scheduledTask;
-    private volatile int intervalHours;
-    private volatile LocalDateTime lastRunAt;
-    private volatile LocalDateTime nextRunAt;
-    private volatile boolean running = false;
-    private volatile boolean jobInProgress = false;
-    private volatile Listener listener;
+    private ScheduledFuture<?>       scheduledTask;
+    private volatile int             intervalMinutes;   // interval theo PHÚT
+    private volatile LocalDateTime   lastRunAt;
+    private volatile LocalDateTime   nextRunAt;
+    private volatile boolean         running     = false;
+    private volatile boolean         jobInProgress = false;
+    private volatile Listener        listener;
 
     private CrawlScheduler() {
-        this.intervalHours = AppConfig.getInstance().crawlerScheduleHours();
+        // Default: đọc từ config (đơn vị giờ → chuyển sang phút)
+        this.intervalMinutes = AppConfig.getInstance().crawlerScheduleHours() * 60;
     }
 
     // ────────────────────────────────────────────────────────────────────
     // Public control API
     // ────────────────────────────────────────────────────────────────────
 
-    public synchronized void setListener(Listener l) {
-        this.listener = l;
-    }
-
-    public synchronized boolean isRunning()    { return running; }
-    public synchronized boolean isJobActive()  { return jobInProgress; }
-    public synchronized int getIntervalHours() { return intervalHours; }
-    public synchronized LocalDateTime getLastRunAt() { return lastRunAt; }
-    public synchronized LocalDateTime getNextRunAt() { return nextRunAt; }
+    public synchronized void setListener(Listener l)       { this.listener = l; }
+    public synchronized boolean isRunning()                { return running; }
+    public synchronized boolean isJobActive()              { return jobInProgress; }
+    public synchronized int     getIntervalMinutes()       { return intervalMinutes; }
+    public synchronized LocalDateTime getLastRunAt()       { return lastRunAt; }
+    public synchronized LocalDateTime getNextRunAt()       { return nextRunAt; }
 
     /**
      * Bắt đầu lịch (hoặc restart với chu kỳ mới).
-     * Lần chạy đầu tiên sẽ xảy ra sau {@code intervalHours} giờ, KHÔNG chạy ngay
-     * – tránh bất ngờ mở Chrome khi vừa bật app. Nếu muốn chạy ngay: {@link #runNow()}.
+     * @param intervalMinutes chu kỳ tính bằng PHÚT (tối thiểu 1)
      */
-    public synchronized void start(int intervalHours) {
-        if (intervalHours <= 0) {
-            log("Chu kỳ không hợp lệ (" + intervalHours + "). Huỷ.");
+    public synchronized void start(int intervalMinutes) {
+        if (intervalMinutes <= 0) {
+            log("Chu kỳ không hợp lệ (" + intervalMinutes + " phút). Huỷ.");
             return;
         }
-        this.intervalHours = intervalHours;
-
-        stopInternal(); // cancel old task if any
+        this.intervalMinutes = intervalMinutes;
+        stopInternal();
 
         executor = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "crawl-scheduler");
@@ -88,35 +81,30 @@ public class CrawlScheduler {
             return t;
         });
 
-        long periodSec = (long) intervalHours * 3600L;
-        // initialDelay = period để tránh chạy ngay lập tức
+        long periodSec = (long) intervalMinutes * 60L;
+        // initialDelay = period để tránh chạy ngay lập tức khi bật
         scheduledTask = executor.scheduleAtFixedRate(
                 this::runJob, periodSec, periodSec, TimeUnit.SECONDS);
 
-        running = true;
-        nextRunAt = LocalDateTime.now().plusHours(intervalHours);
-        log("▶️  Lịch tự động đã bật (mỗi " + intervalHours + "h). Lần chạy kế: " + nextRunAt);
+        running   = true;
+        nextRunAt = LocalDateTime.now().plusMinutes(intervalMinutes);
+        log("[START] Lịch tự động đã bật (mỗi " + formatInterval(intervalMinutes)
+                + "). Lần chạy kế: " + nextRunAt);
     }
 
     public synchronized void stop() {
         stopInternal();
-        log("⏹️  Đã tắt lịch tự động.");
+        log("[STOP] Đã tắt lịch tự động.");
     }
 
     private void stopInternal() {
-        if (scheduledTask != null) {
-            scheduledTask.cancel(false);
-            scheduledTask = null;
-        }
-        if (executor != null) {
-            executor.shutdown();
-            executor = null;
-        }
-        running = false;
+        if (scheduledTask != null) { scheduledTask.cancel(false); scheduledTask = null; }
+        if (executor != null)      { executor.shutdown(); executor = null; }
+        running   = false;
         nextRunAt = null;
     }
 
-    /** Chạy ngay 1 lần trên background thread (không ảnh hưởng schedule). */
+    /** Chạy ngay 1 lần trên background thread. */
     public synchronized void runNow() {
         if (jobInProgress) {
             log("Một lần chạy đang diễn ra, bỏ qua yêu cầu 'Chạy ngay'.");
@@ -128,7 +116,7 @@ public class CrawlScheduler {
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // Core job: crawl + analyze + evaluate for every active student
+    // Core job
     // ────────────────────────────────────────────────────────────────────
 
     private void runJob() {
@@ -143,38 +131,31 @@ public class CrawlScheduler {
 
             List<Student> students = studentDAO.findAll();
             if (students.isEmpty()) {
-                log("Không có sinh viên nào trong hệ thống – bỏ qua.");
-                return;
+                log("Không có sinh viên nào – bỏ qua."); return;
             }
 
             for (Student s : students) {
                 log("────────────────────────────────────────");
                 log("Sinh viên: " + s.getUsername());
 
-                // ── 1. Crawl mới ──────────────────────────────────────────
                 try {
                     log("  (1) Đang cào bài nộp...");
                     crawlerService.startCrawl(s);
                 } catch (Exception ex) {
-                    log("  Lỗi khi cào: " + ex.getMessage());
-                    continue;
+                    log("  Lỗi khi cào: " + ex.getMessage()); continue;
                 }
 
-                // ── 2. Phân tích những bài chưa có analysis ───────────────
                 try {
-                    List<Submission> pending =
-                            submissionDAO.findUnanalyzedByStudent(s.getId(), 200);
-                    log("  (2) Gemini phân tích " + pending.size() + " bài chưa được phân tích.");
+                    List<Submission> pending = submissionDAO.findUnanalyzedByStudent(s.getId(), 200);
+                    log("  (2) Gemini phân tích " + pending.size() + " bài chưa phân tích.");
                     for (Submission sub : pending) {
                         codeAnalyzer.analyzeSubmission(sub);
-                        // Nghỉ giữa các request để tránh rate-limit Gemini
-                        try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+                        try { Thread.sleep(4500); } catch (InterruptedException ignored) {}
                     }
                 } catch (Exception ex) {
                     log("  Lỗi khi phân tích: " + ex.getMessage());
                 }
 
-                // ── 3. Đánh giá tổng thể sinh viên ────────────────────────
                 try {
                     log("  (3) Tổng hợp đánh giá...");
                     studentEvaluator.evaluateStudent(s);
@@ -185,7 +166,7 @@ public class CrawlScheduler {
 
             log("✅ Hoàn tất chu trình lúc " + LocalDateTime.now());
             if (running) {
-                nextRunAt = LocalDateTime.now().plusHours(intervalHours);
+                nextRunAt = LocalDateTime.now().plusMinutes(intervalMinutes);
                 log("Lần chạy kế: " + nextRunAt);
             }
         } catch (Throwable t) {
@@ -196,11 +177,20 @@ public class CrawlScheduler {
         }
     }
 
+    // ────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ────────────────────────────────────────────────────────────────────
+
+    /** Hiển thị "2 giờ 30 phút" hoặc "45 phút" tùy giá trị. */
+    public static String formatInterval(int minutes) {
+        if (minutes < 60) return minutes + " phút";
+        int h = minutes / 60, m = minutes % 60;
+        return m == 0 ? h + " giờ" : h + " giờ " + m + " phút";
+    }
+
     private void log(String msg) {
         System.out.println("[Scheduler] " + msg);
         Listener l = this.listener;
-        if (l != null) {
-            try { l.onEvent(msg); } catch (Exception ignored) {}
-        }
+        if (l != null) { try { l.onEvent(msg); } catch (Exception ignored) {} }
     }
 }

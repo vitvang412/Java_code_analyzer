@@ -24,6 +24,12 @@ public class StudentManagementPanel extends JPanel {
     private       DefaultTableModel tableModel;
     private       JTextArea         logArea;
 
+    // Singleton crawler — keeps the browser alive between crawl sessions
+    private static final CodeforceCrawler CRAWLER = new CodeforceCrawler();
+
+    // "Close Browser" button — updated dynamically
+    private final StyledButton btnCloseBrowser = new StyledButton("Close Browser", StyledButton.Variant.DANGER);
+
     public StudentManagementPanel() {
         setLayout(new BorderLayout(0, 0));
         setBackground(UIConstants.BACKGROUND);
@@ -51,19 +57,22 @@ public class StudentManagementPanel extends JPanel {
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         buttons.setOpaque(false);
 
-        StyledButton btnAdd     = new StyledButton("Add Account",   StyledButton.Variant.PRIMARY);
-        StyledButton btnCrawl   = new StyledButton("Start Crawl",   StyledButton.Variant.ACCENT);
-        StyledButton btnRefresh = new StyledButton("Refresh",       StyledButton.Variant.NEUTRAL);
-        StyledButton btnDelete  = new StyledButton("Remove",        StyledButton.Variant.DANGER);
+        StyledButton btnAdd     = new StyledButton("Add Account",    StyledButton.Variant.PRIMARY);
+        StyledButton btnCrawl   = new StyledButton("Start Crawl",  StyledButton.Variant.ACCENT);
+        StyledButton btnRefresh = new StyledButton("Refresh",      StyledButton.Variant.NEUTRAL);
+        StyledButton btnDelete  = new StyledButton("Remove",         StyledButton.Variant.DANGER);
 
-        btnAdd.addActionListener(e -> addStudent());
-        btnCrawl.addActionListener(e -> crawlSelected());
+        btnAdd.addActionListener(e    -> addStudent());
+        btnCrawl.addActionListener(e  -> crawlSelected());
         btnRefresh.addActionListener(e -> refreshData());
         btnDelete.addActionListener(e -> deleteSelected());
+        btnCloseBrowser.addActionListener(e -> closeBrowserAction());
+        updateCloseBrowserBtn();
 
         buttons.add(btnRefresh);
         buttons.add(btnAdd);
         buttons.add(btnDelete);
+        buttons.add(btnCloseBrowser);
         buttons.add(btnCrawl);
 
         bar.add(title,   BorderLayout.WEST);
@@ -197,14 +206,33 @@ public class StudentManagementPanel extends JPanel {
         Student s = studentDAO.findById(id);
         if (s == null) { appendLog("[ERR] Student not found."); return; }
 
-        appendLog("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        appendLog("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         appendLog("[START] Crawling: " + s.getUsername());
 
         new Thread(() -> {
-            CodeforceCrawler crawler = new CodeforceCrawler();
-            crawler.crawlForStudent(s, msg -> SwingUtilities.invokeLater(() -> appendLog(msg)));
-            SwingUtilities.invokeLater(this::refreshData);
+            // Use singleton CRAWLER so the browser persists between sessions
+            CRAWLER.crawlForStudent(s, msg -> SwingUtilities.invokeLater(() -> appendLog(msg)));
+            SwingUtilities.invokeLater(() -> {
+                refreshData();
+                updateCloseBrowserBtn();
+            });
         }, "crawler-thread").start();
+    }
+
+    private void closeBrowserAction() {
+        if (CRAWLER.isBrowserOpen()) {
+            CRAWLER.closeBrowser();
+            appendLog("[INFO] Trình duyệt đã được đóng.");
+        } else {
+            appendLog("[INFO] Trình duyệt chưa mở.");
+        }
+        updateCloseBrowserBtn();
+    }
+
+    private void updateCloseBrowserBtn() {
+        boolean open = CRAWLER.isBrowserOpen();
+        btnCloseBrowser.setText(open ? "Close Browser" : "Browser: Closed");
+        btnCloseBrowser.setEnabled(open);
     }
 
     void refreshData() {

@@ -29,11 +29,11 @@ public class StudentEvaluationDAO {
         }
 
         String sql = """
-            INSERT INTO student_evaluations
-                (student_id, dsa_score, ai_dependency_score, top_algorithms,
-                 top_data_structures, total_analyzed, evaluated_at)
-            VALUES (?, ?, ?, ?, ?, ?, NOW())
-            """;
+                INSERT INTO student_evaluations
+                    (student_id, dsa_score, ai_dependency_score, top_algorithms,
+                     top_data_structures, total_analyzed, evaluated_at)
+                VALUES (?, ?, ?, ?, ?, ?, NOW())
+                """;
         try (PreparedStatement ps = conn().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, e.getStudentId());
             ps.setDouble(2, e.getDsaScore());
@@ -43,7 +43,8 @@ public class StudentEvaluationDAO {
             ps.setInt(6, e.getTotalAnalyzed());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
-                if (rs.next()) return rs.getInt(1);
+                if (rs.next())
+                    return rs.getInt(1);
             }
         } catch (SQLException ex) {
             System.err.println("[StudentEvaluationDAO] save error: " + ex.getMessage());
@@ -53,17 +54,18 @@ public class StudentEvaluationDAO {
 
     public StudentEvaluation findByStudentId(int studentId) {
         String sql = """
-            SELECT se.*, st.username AS student_username
-            FROM student_evaluations se
-            JOIN students st ON st.id = se.student_id
-            WHERE se.student_id = ?
-            ORDER BY se.evaluated_at DESC
-            LIMIT 1
-            """;
+                SELECT se.*, st.username AS student_username
+                FROM student_evaluations se
+                JOIN students st ON st.id = se.student_id
+                WHERE se.student_id = ?
+                ORDER BY se.evaluated_at DESC
+                LIMIT 1
+                """;
         try (PreparedStatement ps = conn().prepareStatement(sql)) {
             ps.setInt(1, studentId);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return map(rs);
+                if (rs.next())
+                    return map(rs);
             }
         } catch (SQLException ex) {
             System.err.println("[StudentEvaluationDAO] findByStudentId error: " + ex.getMessage());
@@ -74,14 +76,15 @@ public class StudentEvaluationDAO {
     public List<StudentEvaluation> findAll() {
         List<StudentEvaluation> list = new ArrayList<>();
         String sql = """
-            SELECT se.*, st.username AS student_username
-            FROM student_evaluations se
-            JOIN students st ON st.id = se.student_id
-            ORDER BY se.evaluated_at DESC
-            """;
+                SELECT se.*, st.username AS student_username
+                FROM student_evaluations se
+                JOIN students st ON st.id = se.student_id
+                ORDER BY se.evaluated_at DESC
+                """;
         try (PreparedStatement ps = conn().prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) list.add(map(rs));
+                ResultSet rs = ps.executeQuery()) {
+            while (rs.next())
+                list.add(map(rs));
         } catch (SQLException ex) {
             System.err.println("[StudentEvaluationDAO] findAll error: " + ex.getMessage());
         }
@@ -98,8 +101,12 @@ public class StudentEvaluationDAO {
         e.setTopDataStructures(rs.getString("top_data_structures"));
         e.setTotalAnalyzed(rs.getInt("total_analyzed"));
         Timestamp ts = rs.getTimestamp("evaluated_at");
-        if (ts != null) e.setEvaluatedAt(ts.toLocalDateTime());
-        try { e.setStudentUsername(rs.getString("student_username")); } catch (SQLException ignored) {}
+        if (ts != null)
+            e.setEvaluatedAt(ts.toLocalDateTime());
+        try {
+            e.setStudentUsername(rs.getString("student_username"));
+        } catch (SQLException ignored) {
+        }
         return e;
     }
 }

@@ -6,7 +6,7 @@ import com.codeanalyzer.ui.panels.*;
 import javax.swing.*;
 import javax.swing.plaf.basic.BasicTabbedPaneUI;
 import java.awt.*;
-import java.awt.geom.RoundRectangle2D;
+
 
 public class MainFrame extends JFrame {
 
@@ -23,7 +23,7 @@ public class MainFrame extends JFrame {
     private void initComponents() {
         setLayout(new BorderLayout());
         add(buildHeader(), BorderLayout.NORTH);
-        add(buildTabs(),   BorderLayout.CENTER);
+        add(buildTabs(), BorderLayout.CENTER);
         add(new StatusBar(), BorderLayout.SOUTH);
     }
 
@@ -99,8 +99,8 @@ public class MainFrame extends JFrame {
         verBadge.setForeground(UIConstants.ACCENT_LIGHT);
         verBadge.setHorizontalAlignment(SwingConstants.RIGHT);
 
-        header.add(leftBlock,  BorderLayout.WEST);
-        header.add(verBadge,   BorderLayout.EAST);
+        header.add(leftBlock, BorderLayout.WEST);
+        header.add(verBadge, BorderLayout.EAST);
         return header;
     }
 
@@ -116,7 +116,7 @@ public class MainFrame extends JFrame {
         tabs.setUI(new BasicTabbedPaneUI() {
             @Override
             protected void paintTabBackground(Graphics g, int tabPlacement, int tabIndex,
-                                              int x, int y, int w, int h, boolean isSelected) {
+                    int x, int y, int w, int h, boolean isSelected) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 if (isSelected) {
@@ -131,19 +131,23 @@ public class MainFrame extends JFrame {
                 }
                 g2.dispose();
             }
+
             @Override
             protected void paintTabBorder(Graphics g, int tabPlacement, int tabIndex,
-                                          int x, int y, int w, int h, boolean isSelected) {}
+                    int x, int y, int w, int h, boolean isSelected) {
+            }
+
             @Override
             protected void paintFocusIndicator(Graphics g, int tabPlacement, Rectangle[] rects,
-                                               int tabIndex, Rectangle iconRect, Rectangle textRect, boolean isSelected) {}
+                    int tabIndex, Rectangle iconRect, Rectangle textRect, boolean isSelected) {
+            }
         });
 
-        tabs.addTab("  Manage Accounts  ",  new StudentManagementPanel());
-        tabs.addTab("  Submissions  ",       new SubmissionPanel());
-        tabs.addTab("  AI Analysis  ",       new AnalysisPanel());
-        tabs.addTab("  Evaluations  ",       new EvaluationPanel());
-        tabs.addTab("  Scheduler  ",         new SchedulerPanel());
+        tabs.addTab("  Manage Accounts  ", new StudentManagementPanel());
+        tabs.addTab("  Submissions  ", new SubmissionPanel());
+        tabs.addTab("  AI Analysis  ", new AnalysisPanel());
+        tabs.addTab("  Evaluations  ", new EvaluationPanel());
+        tabs.addTab("  Scheduler  ", new SchedulerPanel());
 
         return tabs;
     }

@@ -2,8 +2,11 @@ package com.codeanalyzer.crawler;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
@@ -24,25 +27,41 @@ import com.codeanalyzer.util.AppConfig;
  * Semi-automatic Codeforces crawler using Selenium + Chrome.
  * <p>
  * Flow:
- *  1. Open Chrome with the user's real Chrome profile (keeps cookies / login).
- *  2. Navigate to the student's submission list.
- *  3. PAUSE – user solves any Cloudflare / CAPTCHA challenge in the browser.
- *  4. After user signals "ready", crawl ALL pages of accepted submissions.
- *  5. For each accepted submission, open its detail page and save the source code.
+ * 1. Open Chrome with the user's real Chrome profile (keeps cookies / login).
+ * 2. Navigate to the student's submission list.
+ * 3. PAUSE – user solves any Cloudflare / CAPTCHA challenge in the browser.
+ * 4. After user signals "ready", crawl ALL pages of accepted submissions.
+ * 5. For each accepted submission, open its detail page and save the source
+ * code.
  */
 public class CodeforceCrawler {
 
     // ──────────────────────────────────────────────────────────────────────────
     // CSS / XPath selectors (based on Codeforces HTML as of 2024)
     // ──────────────────────────────────────────────────────────────────────────
-    private static final String SEL_SUBMISSION_ROW   = "table.status-frame-datatable tr";
+    private static final String SEL_SUBMISSION_ROW = "table.status-frame-datatable tr";
     private static final String SEL_VERDICT_ACCEPTED = "span.verdict-accepted";
-    private static final String SEL_SOURCE_CODE      = "pre#program-source-text";
-    private static final String SEL_NEXT_PAGE        = "span.page-index a";           // next-page link
+    private static final String SEL_SOURCE_CODE = "pre#program-source-text";
+    private static final String SEL_NEXT_PAGE = "span.page-index a"; // next-page link
 
-    private final AppConfig     cfg          = AppConfig.getInstance();
+    private final AppConfig cfg = AppConfig.getInstance();
     private final SubmissionDAO submissionDAO = new SubmissionDAO();
-    private final StudentDAO    studentDAO   = new StudentDAO();
+    private final StudentDAO studentDAO = new StudentDAO();
+
+    // ── Persistent browser instance ────────────────────────────────────────────
+    // Browser is kept alive between crawl sessions so the user doesn't need to
+    // re-solve Cloudflare challenges every time.
+    private WebDriver     persistentDriver = null;
+    private WebDriverWait persistentWait   = null;
+
+    public CodeforceCrawler() {
+        // Register shutdown hook: close browser gracefully when app exits
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (persistentDriver != null) {
+                try { persistentDriver.quit(); } catch (Exception ignored) {}
+            }
+        }, "crawler-shutdown"));
+    }
 
     // ──────────────────────────────────────────────────────────────────────────
     // Public entry point
@@ -52,14 +71,24 @@ public class CodeforceCrawler {
      * Crawls all accepted submissions for the given student.
      * Blocks until crawling is complete (call from a background thread).
      *
-     * @param student   the student to crawl
-     * @param statusCallback  optional callback invoked with status messages for the UI (can be null)
+     * @param student        the student to crawl
+     * @param statusCallback optional callback invoked with status messages for the
+     *                       UI (can be null)
      */
     public void crawlForStudent(Student student, CrawlStatusCallback statusCallback) {
         log(statusCallback, "Bắt đầu cào dữ liệu cho: " + student.getUsername());
 
-        WebDriver driver = buildDriver();
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+        // Reuse or create browser (persistent — stays open between crawls)
+        if (!isDriverAlive()) {
+            log(statusCallback, "[INFO] Khởi động trình duyệt Chrome...");
+            persistentDriver = buildDriver();
+            persistentWait   = new WebDriverWait(persistentDriver, Duration.ofSeconds(30));
+        } else {
+            log(statusCallback, "♻️  Tái sử dụng trình duyệt đang mở.");
+        }
+
+        WebDriver driver = persistentDriver;
+        WebDriverWait wait = persistentWait;
 
         try {
             // ── Step 1: Open the submissions page ────────────────────────────
@@ -95,14 +124,13 @@ public class CodeforceCrawler {
                     }
 
                     Submission sub = new Submission(
-                        student.getId(),
-                        m.problemId,
-                        m.problemName,
-                        m.language,
-                        sourceCode,
-                        "Accepted",
-                        LocalDateTime.now()
-                    );
+                            student.getId(),
+                            m.problemId,
+                            m.problemName,
+                            m.language,
+                            sourceCode,
+                            "Accepted",
+                            m.submittedAt != null ? m.submittedAt : LocalDateTime.now());
                     submissionDAO.save(sub);
                     saved++;
                     log(statusCallback, "  → Đã lưu.");
@@ -117,6 +145,7 @@ public class CodeforceCrawler {
             // ── Step 5: Update last-crawled timestamp ─────────────────────────
             studentDAO.updateLastCrawled(student.getId(), LocalDateTime.now());
             log(statusCallback, String.format("✅ Hoàn tất! Đã lưu %d bài, bỏ qua %d bài.", saved, skipped));
+            log(statusCallback, "💡 Trình duyệt vẫn mở – có thể crawl tiếp bất cứ lúc nào.");
 
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
@@ -124,14 +153,46 @@ public class CodeforceCrawler {
         } catch (Exception e) {
             log(statusCallback, "Lỗi nghiêm trọng: " + e.getMessage());
             e.printStackTrace();
-        } finally {
-            driver.quit();
+            // Driver crashed: reset so next run will rebuild it
+            persistentDriver = null;
+            persistentWait   = null;
         }
+        // NOTE: driver.quit() deliberately NOT called — browser stays open!
     }
 
     // Overload for callers that don't need status callbacks
     public void crawlForStudent(Student student) {
         crawlForStudent(student, null);
+    }
+
+    /**
+     * Đóng trình duyệt thủ công (gọi từ UI khi cần).
+     * Lần crawl tiếp theo sẽ mở lại Chrome tự động.
+     */
+    public void closeBrowser() {
+        if (persistentDriver != null) {
+            try { persistentDriver.quit(); } catch (Exception ignored) {}
+            persistentDriver = null;
+            persistentWait   = null;
+            System.out.println("[Crawler] Trình duyệt đã được đóng.");
+        }
+    }
+
+    /** Kiểm tra driver còn sống không (không bị đóng tay). */
+    public boolean isBrowserOpen() {
+        return isDriverAlive();
+    }
+
+    private boolean isDriverAlive() {
+        if (persistentDriver == null) return false;
+        try {
+            persistentDriver.getCurrentUrl(); // throws if dead
+            return true;
+        } catch (Exception e) {
+            persistentDriver = null;
+            persistentWait   = null;
+            return false;
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -152,7 +213,8 @@ public class CodeforceCrawler {
                 wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("table.status-frame-datatable")));
                 System.out.println("[DEBUG] ✅ Tìm thấy bảng status-frame-datatable");
             } catch (Exception e) {
-                log(cb, "  Không tìm thấy bảng bài nộp trên trang " + page + ". Có thể do mạng chậm hoặc sai tên tài khoản.");
+                log(cb, "  Không tìm thấy bảng bài nộp trên trang " + page
+                        + ". Có thể do mạng chậm hoặc sai tên tài khoản.");
                 // DEBUG: check what tables exist
                 List<WebElement> allTables = driver.findElements(By.tagName("table"));
                 System.out.println("[DEBUG] Tìm thấy " + allTables.size() + " tables: ");
@@ -166,12 +228,14 @@ public class CodeforceCrawler {
             System.out.println("[DEBUG] Tìm thấy " + rows.size() + " rows trong bảng");
             for (WebElement row : rows) {
                 SubmissionMeta meta = parseRow(row);
-                if (meta != null) all.add(meta);
+                if (meta != null)
+                    all.add(meta);
             }
 
             // Try to go to the next page
             List<WebElement> nextLinks = driver.findElements(By.cssSelector(SEL_NEXT_PAGE));
-            if (nextLinks.isEmpty()) break;
+            if (nextLinks.isEmpty())
+                break;
 
             String nextHref = nextLinks.get(0).getAttribute("href");
             driver.get(nextHref);
@@ -191,7 +255,7 @@ public class CodeforceCrawler {
         try {
             // Only process accepted submissions
             List<WebElement> acceptedSpans = row.findElements(By.cssSelector(SEL_VERDICT_ACCEPTED));
-            
+
             // DEBUG: log all span classes to see what verdicts are present
             List<WebElement> allSpans = row.findElements(By.tagName("span"));
             if (!allSpans.isEmpty()) {
@@ -200,7 +264,7 @@ public class CodeforceCrawler {
                     System.out.println("[DEBUG] Span class: " + className + " | Text: " + span.getText());
                 }
             }
-            
+
             if (!acceptedSpans.isEmpty()) {
                 System.out.println("[DEBUG] ✅ Tìm thấy accepted submission!");
             }
@@ -208,7 +272,7 @@ public class CodeforceCrawler {
                 System.out.println("[DEBUG] Row này không có verdict-accepted, bỏ qua");
                 return null;
             }
-            
+
             // DEBUG: log all links in this row
             List<WebElement> allLinks = row.findElements(By.tagName("a"));
             System.out.println("[DEBUG] Row có " + allLinks.size() + " links:");
@@ -225,12 +289,12 @@ public class CodeforceCrawler {
             System.out.println("[DEBUG] Submission ID: " + submissionId);
 
             // Problem link → extract contestId and problemId
-            // href is like /contest/1234/problem/A  or  /problemset/problem/1234/A
+            // href is like /contest/1234/problem/A or /problemset/problem/1234/A
             String problemHref = "";
             String problemName = "";
-            String contestId   = "";
-            String problemId   = "";
-            
+            String contestId = "";
+            String problemId = "";
+
             // Try to find problem link - first approach: td.problem-cell a
             List<WebElement> problemLinks = row.findElements(By.cssSelector("td.problem-cell a"));
             if (!problemLinks.isEmpty()) {
@@ -281,14 +345,36 @@ public class CodeforceCrawler {
                 System.out.println("[DEBUG] ⚠️  Không nhận diện problemHref format: " + problemHref);
             }
 
-            // Language: look for td that contains programming language text
+            // Language (column index 4) và thời gian nộp (column index 2)
             String language = "";
+            LocalDateTime submittedAt = null;
             try {
                 List<WebElement> tds = row.findElements(By.tagName("td"));
                 System.out.println("[DEBUG] Row có " + tds.size() + " columns");
-                // Language is typically the 5th column (index 4)
                 if (tds.size() > 4) language = tds.get(4).getText().trim();
                 System.out.println("[DEBUG] Language: " + language);
+
+                // Parse thời gian nộp bài chính xác đến phút
+                // Codeforces dùng <span title="2024/01/15 14:32"> trong cột thứ 3 (index 2)
+                if (tds.size() > 2) {
+                    WebElement timeCell = tds.get(2);
+                    // Ưu tiên thuộc tính title (chứa timestamp đầy đủ)
+                    String titleAttr = timeCell.getAttribute("title");
+                    if (titleAttr == null || titleAttr.isBlank()) {
+                        // Thử tìm span con có title bên trong
+                        List<WebElement> spans = timeCell.findElements(By.tagName("span"));
+                        for (WebElement sp : spans) {
+                            String t = sp.getAttribute("title");
+                            if (t != null && !t.isBlank()) { titleAttr = t; break; }
+                        }
+                    }
+                    String timeText = (titleAttr != null && !titleAttr.isBlank())
+                            ? titleAttr : timeCell.getText();
+                    System.out.println("[DEBUG] Time text: " + timeText);
+                    submittedAt = parseSubmissionTime(timeText);
+                    if (submittedAt != null)
+                        System.out.println("[DEBUG] Parsed time: " + submittedAt);
+                }
             } catch (Exception ignored) {}
 
             SubmissionMeta m = new SubmissionMeta();
@@ -297,6 +383,7 @@ public class CodeforceCrawler {
             m.problemId    = problemId.toUpperCase();
             m.problemName  = problemName;
             m.language     = language;
+            m.submittedAt  = submittedAt;
             System.out.println("[DEBUG] ✅ Created SubmissionMeta: id=" + submissionId + ", problem=" + problemName);
             return m;
 
@@ -330,7 +417,8 @@ public class CodeforceCrawler {
                     viewBtn.click();
                     Thread.sleep(800);
                     pre = driver.findElement(By.cssSelector(SEL_SOURCE_CODE));
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
 
             // Use JS to get the full text (avoids truncation for large files)
@@ -354,7 +442,8 @@ public class CodeforceCrawler {
             if (cid >= 100_000) {
                 return "https://codeforces.com/gym/" + cid + "/submission/" + m.submissionId;
             }
-        } catch (NumberFormatException ignored) {}
+        } catch (NumberFormatException ignored) {
+        }
         return "https://codeforces.com/contest/" + m.contestId + "/submission/" + m.submissionId;
     }
 
@@ -366,7 +455,7 @@ public class CodeforceCrawler {
         ChromeOptions options = new ChromeOptions();
 
         String profilePath = cfg.chromeProfilePath();
-        String profileDir  = cfg.chromeProfileDir();
+        String profileDir = cfg.chromeProfileDir();
 
         if (profilePath != null && !profilePath.isBlank()) {
             options.addArguments("user-data-dir=" + profilePath);
@@ -386,7 +475,7 @@ public class CodeforceCrawler {
             ChromeDriver driver = new ChromeDriver(options);
             // JS override to hide webdriver flag
             ((JavascriptExecutor) driver).executeScript(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
+                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
             return driver;
         } catch (Exception e) {
             System.err.println("[Crawler] ❌ Không mở được Chrome: " + e.getMessage());
@@ -401,22 +490,57 @@ public class CodeforceCrawler {
 
     private void waitForOkDialog(String username) throws InterruptedException {
         try {
-            javax.swing.SwingUtilities.invokeAndWait(() ->
-                javax.swing.JOptionPane.showMessageDialog(
+            javax.swing.SwingUtilities.invokeAndWait(() -> javax.swing.JOptionPane.showMessageDialog(
                     null,
                     "Chrome đã mở trang bài nộp của \"" + username + "\".\n\n"
-                    + "LƯU Ý QUAN TRỌNG TRƯỚC KHI BẤM OK:\n"
-                    + "1. Vượt qua Cloudflare (nhấn 'I am human') nếu có.\n"
-                    + "2. ĐĂNG NHẬP CODEFORCES TẠI TRÌNH DUYỆT NÀY nếu bạn đang cào bài của chính mình,\n"
-                    + "   bài trong Gym, hoặc Group kín (để có quyền xem Source Code).\n"
-                    + "3. Chờ trang tải xong danh sách bài nộp rồi mới nhấn OK tại đây.",
+                            + "LƯU Ý QUAN TRỌNG TRƯỚC KHI BẤM OK:\n"
+                            + "1. Vượt qua Cloudflare (nhấn 'I am human') nếu có.\n"
+                            + "2. ĐĂNG NHẬP CODEFORCES TẠI TRÌNH DUYỆT NÀY nếu bạn đang cào bài của chính mình,\n"
+                            + "   bài trong Gym, hoặc Group kín (để có quyền xem Source Code).\n"
+                            + "3. Chờ trang tải xong danh sách bài nộp rồi mới nhấn OK tại đây.",
                     "⏳ Chờ bạn thiết lập & đăng nhập...",
-                    javax.swing.JOptionPane.WARNING_MESSAGE
-                )
-            );
+                    javax.swing.JOptionPane.WARNING_MESSAGE));
         } catch (java.lang.reflect.InvocationTargetException e) {
             throw new RuntimeException("Dialog error", e);
         }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Parse submission time
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Parse thời gian nộp bài từ chuỗi Codeforces. Hỗ trợ các định dạng:
+     *  1. "2024/01/15 14:32"    — title attribute (chính xác đến phút)
+     *  2. "Jan/15/2024 14:32"   — text hiển thị cổ điển
+     *  3. "2024-01-15 14:32:05" — ISO
+     *  4. "15 minutes/hours/days ago" — tương đối
+     */
+    private LocalDateTime parseSubmissionTime(String text) {
+        if (text == null || text.isBlank()) return null;
+        text = text.trim();
+        // Format 1: "2024/01/15 14:32" (title attribute)
+        try { return LocalDateTime.parse(text,
+                DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm", Locale.ENGLISH)); }
+        catch (DateTimeParseException ignored) {}
+        // Format 2: "Jan/15/2024 14:32"
+        try { return LocalDateTime.parse(text,
+                DateTimeFormatter.ofPattern("MMM/dd/yyyy HH:mm", Locale.ENGLISH)); }
+        catch (DateTimeParseException ignored) {}
+        // Format 3: ISO "2024-01-15 14:32:05"
+        try { return LocalDateTime.parse(text,
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)); }
+        catch (DateTimeParseException ignored) {}
+        // Format 4: relative ("X minutes/hours/days ago")
+        try {
+            String lower = text.toLowerCase();
+            int num = Integer.parseInt(lower.replaceAll("[^0-9]", "").trim());
+            if (lower.contains("minute")) return LocalDateTime.now().minusMinutes(num);
+            if (lower.contains("hour"))   return LocalDateTime.now().minusHours(num);
+            if (lower.contains("day"))    return LocalDateTime.now().minusDays(num);
+        } catch (Exception ignored) {}
+        System.out.println("[Crawler] Không parse được thời gian: " + text);
+        return null;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -430,6 +554,7 @@ public class CodeforceCrawler {
         String problemId;
         String problemName;
         String language;
+        LocalDateTime submittedAt;  // thời điểm nộp bài thực tế, chính xác đến phút
     }
 
     /** Callback interface so the UI can display crawl progress in real time. */
@@ -439,6 +564,7 @@ public class CodeforceCrawler {
 
     private void log(CrawlStatusCallback cb, String msg) {
         System.out.println("[Crawler] " + msg);
-        if (cb != null) cb.onStatus(msg);
+        if (cb != null)
+            cb.onStatus(msg);
     }
 }

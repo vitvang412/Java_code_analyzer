@@ -17,10 +17,11 @@ import java.util.List;
 
 /**
  * Panel displaying crawled submissions with a source code preview.
+ * Refined UI with modern table styles and rounded corners.
  */
 public class SubmissionPanel extends JPanel {
 
-    private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("HH:mm   dd/MM/yyyy");
 
     private final SubmissionDAO         submissionDAO = new SubmissionDAO();
     private final StudentDAO            studentDAO    = new StudentDAO();
@@ -29,6 +30,7 @@ public class SubmissionPanel extends JPanel {
     private       JTextArea             sourceArea;
     private       JLabel                sourceTitleLbl;
     private       List<Submission>      currentList;
+    private       boolean               isUpdatingCombo = false;
 
     public SubmissionPanel() {
         setLayout(new BorderLayout(0, 0));
@@ -48,29 +50,40 @@ public class SubmissionPanel extends JPanel {
         bar.setBackground(UIConstants.CARD_BG);
         bar.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, UIConstants.BORDER),
-                new EmptyBorder(10, 16, 10, 16)));
+                new EmptyBorder(12, 20, 12, 20)));
 
-        JLabel title = new JLabel("Submissions");
+        JLabel title = new JLabel("📄 Submissions Data");
         title.setFont(UIConstants.SUBHEADER);
         title.setForeground(UIConstants.PRIMARY_DARK);
 
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         right.setOpaque(false);
 
-        JLabel lbl = new JLabel("Filter:");
+        JLabel lbl = new JLabel("Filter Account:");
         lbl.setFont(UIConstants.SMALL_BOLD);
         lbl.setForeground(UIConstants.TEXT_SECONDARY);
 
         cboStudent = new JComboBox<>();
         cboStudent.setFont(UIConstants.MAIN);
-        cboStudent.setPreferredSize(new Dimension(200, 30));
-        cboStudent.addActionListener(e -> refreshData());
+        cboStudent.setPreferredSize(new Dimension(200, 32));
+        cboStudent.addActionListener(e -> {
+            if (!isUpdatingCombo) refreshData();
+        });
+
+        cboStudent.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
+                loadStudentCombo();
+            }
+            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
+            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
+        });
 
         StyledButton btnRefresh = new StyledButton("Refresh", StyledButton.Variant.NEUTRAL);
         btnRefresh.addActionListener(e -> refreshData());
 
         right.add(lbl);
         right.add(cboStudent);
+        right.add(Box.createHorizontalStrut(10));
         right.add(btnRefresh);
 
         bar.add(title, BorderLayout.WEST);
@@ -81,8 +94,8 @@ public class SubmissionPanel extends JPanel {
     // ── Main split ────────────────────────────────────────────────────────────
 
     private JSplitPane buildSplitPane() {
-        // Left: submissions table
-        String[] cols = {"ID", "Username", "Problem", "Language", "Verdict", "Submitted"};
+        // ── LEFT: submissions table ──
+        String[] cols = {"ID", "Username", "Problem", "Language", "Verdict", "Submitted Time"};
         tableModel = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -97,6 +110,22 @@ public class SubmissionPanel extends JPanel {
                     c.setBackground(UIConstants.TABLE_SEL_BG);
                     c.setForeground(UIConstants.TABLE_SEL_FG);
                 }
+                
+                // Tô màu Verdict
+                if (col == 4 && !isRowSelected(row)) {
+                    String verdict = (String) getValueAt(row, col);
+                    if ("Accepted".equalsIgnoreCase(verdict) || "OK".equalsIgnoreCase(verdict)) {
+                        c.setForeground(new Color(0x059669)); // Emerald 600
+                        c.setFont(UIConstants.SMALL_BOLD);
+                    } else if ("Wrong Answer".equalsIgnoreCase(verdict)) {
+                        c.setForeground(new Color(0xDC2626)); // Red 600
+                        c.setFont(UIConstants.MAIN);
+                    } else if (verdict != null && verdict.contains("Time Limit")) {
+                        c.setForeground(new Color(0xD97706)); // Amber 600
+                    }
+                } else if (col != 4) {
+                    c.setFont(UIConstants.MAIN);
+                }
                 return c;
             }
         };
@@ -106,9 +135,9 @@ public class SubmissionPanel extends JPanel {
         DefaultTableCellRenderer center = new DefaultTableCellRenderer();
         center.setHorizontalAlignment(SwingConstants.CENTER);
         table.getColumnModel().getColumn(0).setCellRenderer(center);
-        table.getColumnModel().getColumn(0).setMaxWidth(55);
+        table.getColumnModel().getColumn(0).setMaxWidth(60);
         table.getColumnModel().getColumn(3).setMaxWidth(130);
-        table.getColumnModel().getColumn(4).setMaxWidth(90);
+        table.getColumnModel().getColumn(4).setMaxWidth(120);
 
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) showSourceCode(table.getSelectedRow());
@@ -122,25 +151,27 @@ public class SubmissionPanel extends JPanel {
         leftWrap.setBackground(UIConstants.BACKGROUND);
         leftWrap.add(tableScroll, BorderLayout.CENTER);
 
-        // Right: source code viewer
-        sourceArea = new JTextArea("Select a submission to view its source code.");
+        // ── RIGHT: source code viewer ──
+        sourceArea = new JTextArea("Vui lòng chọn một bài nộp bên trái để xem source code.");
         sourceArea.setEditable(false);
-        sourceArea.setFont(UIConstants.MONO);
+        sourceArea.setFont(new Font("Consolas", Font.PLAIN, 13));
         sourceArea.setBackground(UIConstants.CONSOLE_BG);
-        sourceArea.setForeground(new Color(0xCFD8DC));
+        sourceArea.setForeground(new Color(0xE2E8F0));
         sourceArea.setCaretColor(UIConstants.ACCENT_LIGHT);
-        sourceArea.setBorder(new EmptyBorder(10, 14, 10, 14));
+        sourceArea.setBorder(new EmptyBorder(12, 16, 12, 16));
         sourceArea.setTabSize(4);
 
         JScrollPane sourceScroll = new JScrollPane(sourceArea);
         sourceScroll.setBorder(BorderFactory.createEmptyBorder());
+        sourceScroll.getViewport().setBackground(UIConstants.CONSOLE_BG);
 
-        sourceTitleLbl = new JLabel("  Source Code Preview");
+        sourceTitleLbl = new JLabel("  </>  Source Code Preview");
         sourceTitleLbl.setFont(UIConstants.SMALL_BOLD);
-        sourceTitleLbl.setForeground(new Color(0x80CBC4));
+        sourceTitleLbl.setForeground(new Color(0x80CBC4)); // Soft Teal
         sourceTitleLbl.setBackground(new Color(0x0D1228));
         sourceTitleLbl.setOpaque(true);
-        sourceTitleLbl.setPreferredSize(new Dimension(0, 26));
+        sourceTitleLbl.setPreferredSize(new Dimension(0, 32));
+        sourceTitleLbl.setBorder(new EmptyBorder(0, 8, 0, 0));
 
         JPanel rightInner = new JPanel(new BorderLayout());
         rightInner.setBackground(UIConstants.CONSOLE_BG);
@@ -148,10 +179,16 @@ public class SubmissionPanel extends JPanel {
         rightInner.add(sourceScroll, BorderLayout.CENTER);
         rightInner.setBorder(BorderFactory.createLineBorder(new Color(0x1A2A4A)));
 
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftWrap, rightInner);
-        split.setResizeWeight(0.45);
-        split.setDividerSize(5);
-        split.setBorder(new EmptyBorder(8, 16, 12, 16));
+        // Bọc lại để có padding
+        JPanel rightWrap = new JPanel(new BorderLayout());
+        rightWrap.setOpaque(false);
+        rightWrap.setBorder(new EmptyBorder(0, 8, 0, 0));
+        rightWrap.add(rightInner, BorderLayout.CENTER);
+
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftWrap, rightWrap);
+        split.setResizeWeight(0.55); // 55% bảng, 45% code
+        split.setDividerSize(6);
+        split.setBorder(new EmptyBorder(12, 16, 16, 16));
         split.setBackground(UIConstants.BACKGROUND);
         return split;
     }
@@ -159,17 +196,33 @@ public class SubmissionPanel extends JPanel {
     // ── Data ──────────────────────────────────────────────────────────────────
 
     private void loadStudentCombo() {
-        cboStudent.removeAllItems();
-        cboStudent.addItem(new StudentItem(0, "All accounts"));
-        for (Student s : studentDAO.findAll()) {
-            cboStudent.addItem(new StudentItem(s.getId(), s.getUsername()));
+        isUpdatingCombo = true;
+        try {
+            Object selObj = cboStudent.getSelectedItem();
+            int selId = (selObj instanceof StudentItem) ? ((StudentItem) selObj).id() : 0;
+
+            cboStudent.removeAllItems();
+            StudentItem all = new StudentItem(0, "All accounts");
+            cboStudent.addItem(all);
+            StudentItem toSelect = all;
+
+            for (Student s : studentDAO.findAll()) {
+                StudentItem item = new StudentItem(s.getId(), s.getUsername());
+                cboStudent.addItem(item);
+                if (item.id() == selId) {
+                    toSelect = item;
+                }
+            }
+            cboStudent.setSelectedItem(toSelect);
+        } finally {
+            isUpdatingCombo = false;
         }
     }
 
     private void refreshData() {
         tableModel.setRowCount(0);
-        sourceArea.setText("Select a submission to view its source code.");
-        sourceTitleLbl.setText("  Source Code Preview");
+        sourceArea.setText("Vui lòng chọn một bài nộp bên trái để xem source code.");
+        sourceTitleLbl.setText("  </>  Source Code Preview");
 
         StudentItem sel = (StudentItem) cboStudent.getSelectedItem();
         currentList = (sel == null || sel.id == 0)
@@ -196,9 +249,9 @@ public class SubmissionPanel extends JPanel {
         int id = (int) tableModel.getValueAt(row, 0);
         currentList.stream().filter(s -> s.getId() == id).findFirst().ifPresent(s -> {
             String code = s.getSourceCode();
-            sourceArea.setText(code != null ? code : "(No source code available)");
+            sourceArea.setText(code != null ? code : "(Không lấy được mã nguồn)");
             sourceArea.setCaretPosition(0);
-            sourceTitleLbl.setText("  " + s.getProblemName() + "  —  " + s.getStudentUsername()
+            sourceTitleLbl.setText("  </>  " + s.getProblemName() + "  —  " + s.getStudentUsername()
                     + "  [" + s.getLanguage() + "]");
         });
     }
@@ -206,7 +259,7 @@ public class SubmissionPanel extends JPanel {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void styleTable(JTable t) {
-        t.setRowHeight(28);
+        t.setRowHeight(32); // Cao hơn tí cho thoáng
         t.setFont(UIConstants.MAIN);
         t.setGridColor(UIConstants.TABLE_GRID);
         t.setShowHorizontalLines(true);
@@ -217,7 +270,7 @@ public class SubmissionPanel extends JPanel {
         t.getTableHeader().setFont(UIConstants.SMALL_BOLD);
         t.getTableHeader().setBackground(UIConstants.TABLE_HEADER_BG);
         t.getTableHeader().setForeground(UIConstants.TABLE_HEADER_FG);
-        t.getTableHeader().setPreferredSize(new Dimension(0, 34));
+        t.getTableHeader().setPreferredSize(new Dimension(0, 36));
         t.getTableHeader().setReorderingAllowed(false);
     }
 

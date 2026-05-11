@@ -19,19 +19,20 @@ import java.util.List;
 
 /**
  * Panel showing the aggregated student evaluation results.
- * - Table: Username, Analyzed, DSA Score, AI Dependency, Top Algorithms, Top DS, Grade, Updated
+ * - Table: Username, Analyzed, DSA Score, AI Dependency, Top Algorithms, Top
+ * DS, Grade, Updated
  * - Double-click row -> opens a detail dialog.
  */
 public class EvaluationPanel extends JPanel {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("HH:mm  dd/MM/yyyy");
 
-    private final StudentEvaluationDAO evalDAO     = new StudentEvaluationDAO();
-    private final AnalysisResultDAO    analysisDAO = new AnalysisResultDAO();
-    private final StudentEvaluator     evaluator   = new StudentEvaluator();
+    private final StudentEvaluationDAO evalDAO = new StudentEvaluationDAO();
+    private final AnalysisResultDAO analysisDAO = new AnalysisResultDAO();
+    private final StudentEvaluator evaluator = new StudentEvaluator();
 
     private final DefaultTableModel tableModel;
-    private final JTable            table;
+    private final JTable table;
 
     public EvaluationPanel() {
         setLayout(new BorderLayout(0, 0));
@@ -42,10 +43,14 @@ public class EvaluationPanel extends JPanel {
                 "Top Algorithms", "Top Data Structures", "Grade", "Last Updated"
         };
         tableModel = new DefaultTableModel(cols, 0) {
-            @Override public boolean isCellEditable(int r, int c) { return false; }
+            @Override
+            public boolean isCellEditable(int r, int c) {
+                return false;
+            }
         };
         table = new JTable(tableModel) {
-            @Override public Component prepareRenderer(javax.swing.table.TableCellRenderer r, int row, int col) {
+            @Override
+            public Component prepareRenderer(javax.swing.table.TableCellRenderer r, int row, int col) {
                 Component c = super.prepareRenderer(r, row, col);
                 if (!isRowSelected(row)) {
                     c.setBackground(row % 2 == 0 ? UIConstants.CARD_BG : UIConstants.TABLE_ALT_ROW);
@@ -75,8 +80,10 @@ public class EvaluationPanel extends JPanel {
         tcm.getColumn(6).setCellRenderer(new GradeRenderer());
 
         table.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mouseClicked(java.awt.event.MouseEvent e) {
-                if (e.getClickCount() == 2) showDetailForSelected();
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2)
+                    showDetailForSelected();
             }
         });
 
@@ -89,8 +96,8 @@ public class EvaluationPanel extends JPanel {
         tableWrap.setBorder(new EmptyBorder(8, 16, 12, 16));
         tableWrap.add(sp, BorderLayout.CENTER);
 
-        add(buildTopBar(),  BorderLayout.NORTH);
-        add(tableWrap,      BorderLayout.CENTER);
+        add(buildTopBar(), BorderLayout.NORTH);
+        add(tableWrap, BorderLayout.CENTER);
 
         refreshData();
     }
@@ -111,19 +118,19 @@ public class EvaluationPanel extends JPanel {
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         buttons.setOpaque(false);
 
-        StyledButton btnRefresh = new StyledButton("Refresh",          StyledButton.Variant.NEUTRAL);
-        StyledButton btnDetail  = new StyledButton("View Detail",      StyledButton.Variant.ACCENT);
-        StyledButton btnRecalc  = new StyledButton("Re-evaluate All",  StyledButton.Variant.PRIMARY);
+        StyledButton btnRefresh = new StyledButton("Refresh", StyledButton.Variant.NEUTRAL);
+        StyledButton btnDetail = new StyledButton("View Detail", StyledButton.Variant.ACCENT);
+        StyledButton btnRecalc = new StyledButton("Re-evaluate All", StyledButton.Variant.PRIMARY);
 
         btnRefresh.addActionListener(e -> refreshData());
-        btnDetail.addActionListener(e  -> showDetailForSelected());
-        btnRecalc.addActionListener(e  -> recalcAll(btnRecalc));
+        btnDetail.addActionListener(e -> showDetailForSelected());
+        btnRecalc.addActionListener(e -> recalcAll(btnRecalc));
 
         buttons.add(btnRefresh);
         buttons.add(btnDetail);
         buttons.add(btnRecalc);
 
-        bar.add(title,   BorderLayout.WEST);
+        bar.add(title, BorderLayout.WEST);
         bar.add(buttons, BorderLayout.EAST);
         return bar;
     }
@@ -133,7 +140,7 @@ public class EvaluationPanel extends JPanel {
     private void refreshData() {
         tableModel.setRowCount(0);
         for (StudentEvaluation e : evalDAO.findAll()) {
-            tableModel.addRow(new Object[]{
+            tableModel.addRow(new Object[] {
                     e.getStudentUsername(),
                     e.getTotalAnalyzed(),
                     String.format("%.2f", e.getDsaScore()),
@@ -158,9 +165,8 @@ public class EvaluationPanel extends JPanel {
                             "Done", JOptionPane.INFORMATION_MESSAGE);
                 });
             } catch (Exception ex) {
-                SwingUtilities.invokeLater(() ->
-                        JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage(),
-                                "Error", JOptionPane.ERROR_MESSAGE));
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE));
             } finally {
                 SwingUtilities.invokeLater(() -> src.setEnabled(true));
             }
@@ -169,13 +175,17 @@ public class EvaluationPanel extends JPanel {
 
     private void showDetailForSelected() {
         int row = table.getSelectedRow();
-        if (row < 0) { JOptionPane.showMessageDialog(this, "Select a row first."); return; }
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Select a row first.");
+            return;
+        }
 
         String username = (String) tableModel.getValueAt(row, 0);
         StudentEvaluation ev = evalDAO.findAll().stream()
                 .filter(e -> username.equals(e.getStudentUsername()))
                 .findFirst().orElse(null);
-        if (ev == null) return;
+        if (ev == null)
+            return;
 
         List<AnalysisResult> details = analysisDAO.findByStudentId(ev.getStudentId());
 
@@ -184,12 +194,12 @@ public class EvaluationPanel extends JPanel {
         sb.append("<html><body style='font-family:Segoe UI;font-size:13px;margin:10px;'>");
         sb.append("<h2 style='color:#1A237E;margin-bottom:4px;'>").append(username).append("</h2>");
         sb.append("<table style='margin-bottom:12px;'>");
-        sb.append(infoRow("Grade",           ev.overallLabel()));
-        sb.append(infoRow("DSA Score",       String.format("%.2f / 10", ev.getDsaScore())));
-        sb.append(infoRow("AI Dependency",   String.format("%.2f / 10", ev.getAiDependencyScore())));
-        sb.append(infoRow("Analyzed",        ev.getTotalAnalyzed() + " submissions"));
-        sb.append(infoRow("Top Algorithms",  ev.getTopAlgorithms()));
-        sb.append(infoRow("Top DS",          ev.getTopDataStructures()));
+        sb.append(infoRow("Grade", ev.overallLabel()));
+        sb.append(infoRow("DSA Score", String.format("%.2f / 10", ev.getDsaScore())));
+        sb.append(infoRow("AI Dependency", String.format("%.2f / 10", ev.getAiDependencyScore())));
+        sb.append(infoRow("Analyzed", ev.getTotalAnalyzed() + " submissions"));
+        sb.append(infoRow("Top Algorithms", ev.getTopAlgorithms()));
+        sb.append(infoRow("Top DS", ev.getTopDataStructures()));
         sb.append("</table>");
 
         sb.append("<h3 style='color:#1A237E;'>Submission Details (").append(details.size()).append(")</h3>");
@@ -206,15 +216,14 @@ public class EvaluationPanel extends JPanel {
             String aiColor = ai >= 7 ? "#C62828" : ai >= 4 ? "#F9A825" : "#00897B";
             sb.append(String.format(
                     "<tr style='background:%s;'><td><b>%s</b></td>"
-                    + "<td align='center' style='color:%s;font-weight:bold;'>%d/10</td>"
-                    + "<td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>",
+                            + "<td align='center' style='color:%s;font-weight:bold;'>%d/10</td>"
+                            + "<td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>",
                     rowBg, esc(r.getProblemName()),
                     aiColor, ai,
                     esc(r.getComplexityEstimate()),
                     esc(r.getAlgorithms()),
                     esc(r.getDataStructures()),
-                    esc(r.getSummary())
-            ));
+                    esc(r.getSummary())));
         }
         sb.append("</table></body></html>");
 
@@ -230,11 +239,12 @@ public class EvaluationPanel extends JPanel {
 
     private String infoRow(String key, String val) {
         return "<tr><td style='color:#546E7A;padding-right:16px;'><b>" + key + "</b></td>"
-             + "<td>" + esc(val) + "</td></tr>";
+                + "<td>" + esc(val) + "</td></tr>";
     }
 
     private String esc(String s) {
-        if (s == null) return "";
+        if (s == null)
+            return "";
         return s.replace("<", "&lt;").replace(">", "&gt;");
     }
 
@@ -258,23 +268,30 @@ public class EvaluationPanel extends JPanel {
 
     private static class ScoreRenderer extends DefaultTableCellRenderer {
         private final boolean higherIsBetter;
+
         ScoreRenderer(boolean higherIsBetter) {
             this.higherIsBetter = higherIsBetter;
             setHorizontalAlignment(SwingConstants.CENTER);
         }
+
         @Override
         public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean f, int r, int c) {
             super.getTableCellRendererComponent(t, v, sel, f, r, c);
             if (!sel) {
                 double val = 0;
-                try { val = Double.parseDouble(String.valueOf(v)); } catch (Exception ignored) {}
+                try {
+                    val = Double.parseDouble(String.valueOf(v));
+                } catch (Exception ignored) {
+                }
                 Color bg, fg;
                 if (higherIsBetter) {
-                    bg  = val >= 6 ? UIConstants.SUCCESS_LIGHT : val >= 3 ? UIConstants.WARNING_LIGHT : UIConstants.DANGER_LIGHT;
-                    fg  = val >= 6 ? UIConstants.SUCCESS : val >= 3 ? UIConstants.WARNING : UIConstants.DANGER;
+                    bg = val >= 6 ? UIConstants.SUCCESS_LIGHT
+                            : val >= 3 ? UIConstants.WARNING_LIGHT : UIConstants.DANGER_LIGHT;
+                    fg = val >= 6 ? UIConstants.SUCCESS : val >= 3 ? UIConstants.WARNING : UIConstants.DANGER;
                 } else {
-                    bg  = val <= 3 ? UIConstants.SUCCESS_LIGHT : val <= 6 ? UIConstants.WARNING_LIGHT : UIConstants.DANGER_LIGHT;
-                    fg  = val <= 3 ? UIConstants.SUCCESS : val <= 6 ? UIConstants.WARNING : UIConstants.DANGER;
+                    bg = val <= 3 ? UIConstants.SUCCESS_LIGHT
+                            : val <= 6 ? UIConstants.WARNING_LIGHT : UIConstants.DANGER_LIGHT;
+                    fg = val <= 3 ? UIConstants.SUCCESS : val <= 6 ? UIConstants.WARNING : UIConstants.DANGER;
                 }
                 setBackground(bg);
                 setForeground(fg);
@@ -285,23 +302,26 @@ public class EvaluationPanel extends JPanel {
     }
 
     private static class GradeRenderer extends DefaultTableCellRenderer {
-        GradeRenderer() { setHorizontalAlignment(SwingConstants.CENTER); }
+        GradeRenderer() {
+            setHorizontalAlignment(SwingConstants.CENTER);
+        }
+
         @Override
         public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean f, int r, int c) {
             super.getTableCellRendererComponent(t, v, sel, f, r, c);
             if (!sel) {
                 String s = String.valueOf(v);
                 Color bg = switch (s) {
-                    case "Tốt"           -> UIConstants.SUCCESS_LIGHT;
-                    case "Trung bình"    -> UIConstants.WARNING_LIGHT;
-                    case "Yếu / Nghi ngờ"-> UIConstants.DANGER_LIGHT;
-                    default              -> UIConstants.CARD_BG;
+                    case "Tốt" -> UIConstants.SUCCESS_LIGHT;
+                    case "Trung bình" -> UIConstants.WARNING_LIGHT;
+                    case "Yếu / Nghi ngờ" -> UIConstants.DANGER_LIGHT;
+                    default -> UIConstants.CARD_BG;
                 };
                 Color fg = switch (s) {
-                    case "Tốt"           -> UIConstants.SUCCESS;
-                    case "Trung bình"    -> UIConstants.WARNING;
-                    case "Yếu / Nghi ngờ"-> UIConstants.DANGER;
-                    default              -> UIConstants.TEXT;
+                    case "Tốt" -> UIConstants.SUCCESS;
+                    case "Trung bình" -> UIConstants.WARNING;
+                    case "Yếu / Nghi ngờ" -> UIConstants.DANGER;
+                    default -> UIConstants.TEXT;
                 };
                 setBackground(bg);
                 setForeground(fg);
