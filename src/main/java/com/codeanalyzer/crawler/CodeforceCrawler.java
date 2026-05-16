@@ -232,13 +232,26 @@ public class CodeforceCrawler {
                     all.add(meta);
             }
 
-            // Try to go to the next page
-            List<WebElement> nextLinks = driver.findElements(By.cssSelector(SEL_NEXT_PAGE));
-            if (nextLinks.isEmpty())
-                break;
+            // Try to go to the next page — build URL directly to avoid always going to page 1
+            // Find if a link for the NEXT page number exists in the pagination bar
+            String nextPageUrl = null;
+            List<WebElement> pageLinks = driver.findElements(By.cssSelector(SEL_NEXT_PAGE));
+            for (WebElement link : pageLinks) {
+                String href = link.getAttribute("href");
+                String linkText = link.getText().trim();
+                // Look for the link whose text equals the next page number
+                try {
+                    int linkPage = Integer.parseInt(linkText);
+                    if (linkPage == page + 1) {
+                        nextPageUrl = href;
+                        break;
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
 
-            String nextHref = nextLinks.get(0).getAttribute("href");
-            driver.get(nextHref);
+            if (nextPageUrl == null) break; // no next page found
+
+            driver.get(nextPageUrl);
             Thread.sleep(1500); // wait for page to load
             page++;
         }
@@ -351,14 +364,14 @@ public class CodeforceCrawler {
             try {
                 List<WebElement> tds = row.findElements(By.tagName("td"));
                 System.out.println("[DEBUG] Row có " + tds.size() + " columns");
+                // Codeforces table columns: [0]=#, [1]=When, [2]=Who, [3]=Problem, [4]=Lang, [5]=Verdict, [6]=Time, [7]=Memory
                 if (tds.size() > 4) language = tds.get(4).getText().trim();
                 System.out.println("[DEBUG] Language: " + language);
 
-                // Parse thời gian nộp bài chính xác đến phút
-                // Codeforces dùng <span title="2024/01/15 14:32"> trong cột thứ 3 (index 2)
-                if (tds.size() > 2) {
-                    WebElement timeCell = tds.get(2);
-                    // Ưu tiên thuộc tính title (chứa timestamp đầy đủ)
+                // Parse thời gian nộp bài — cột index 1 (When), KHÔNG phải index 2 (Who)
+                if (tds.size() > 1) {
+                    WebElement timeCell = tds.get(1); // FIX: index 1 = "When" column
+                    // Ưu tiên thuộc tính title (chứa timestamp đầy đủ, vd: "2024/01/15 14:32")
                     String titleAttr = timeCell.getAttribute("title");
                     if (titleAttr == null || titleAttr.isBlank()) {
                         // Thử tìm span con có title bên trong

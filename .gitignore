@@ -4,9 +4,14 @@
 
 # ----- Sensitive configuration (NEVER commit API keys!) -----
 src/main/resources/config.properties
+**/config.properties
+.env
+.env.*
+!.env.example
 
 # ----- Maven build output -----
 target/
+bin/
 *.class
 *.jar
 *.war

@@ -31,9 +31,11 @@ public class GeminiService {
         String model   = CFG.geminiModel();
         String baseUrl = CFG.geminiApiUrl();
 
-        if (apiKey == null || apiKey.isBlank() || apiKey.equals("YOUR_GEMINI_API_KEY_HERE")) {
+        if (apiKey == null || apiKey.isBlank()
+                || apiKey.equals("YOUR_GEMINI_API_KEY_HERE")
+                || apiKey.equals("CHANGE_ME")) {
             throw new IllegalStateException(
-                    "Gemini API key is not configured. Please set 'gemini.api.key' in config.properties.");
+                    "Gemini API key is not configured. Please set GEMINI_API_KEY or 'gemini.api.key' in config.properties.");
         }
 
         String url = baseUrl + model + ":generateContent?key=" + apiKey;

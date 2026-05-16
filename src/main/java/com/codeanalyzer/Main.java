@@ -1,7 +1,6 @@
 package com.codeanalyzer;
 
 import com.codeanalyzer.database.DatabaseConnection;
-import com.codeanalyzer.database.DatabaseInitializer;
 import com.codeanalyzer.ui.MainFrame;
 
 import javax.swing.*;
@@ -23,16 +22,13 @@ public class Main {
             }
         } catch (Exception ignored) {}
 
-        // 2. Init DB
-        DatabaseInitializer.initialize();
-
-        // 3. Launch UI
+        // 2. Launch UI
         SwingUtilities.invokeLater(() -> {
             MainFrame frame = new MainFrame();
             frame.setVisible(true);
         });
 
-        // 4. Cleanup on close
+        // 3. Cleanup on close
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             DatabaseConnection.getInstance().close();
         }));

@@ -28,21 +28,29 @@ public class AppConfig {
     }
 
     public String get(String key) {
-        return props.getProperty(key, "");
+        return get(key, "");
     }
 
     public String get(String key, String defaultValue) {
+        String envValue = System.getenv(toEnvKey(key));
+        if (envValue != null && !envValue.isBlank()) {
+            return envValue;
+        }
         return props.getProperty(key, defaultValue);
     }
 
     public int getInt(String key, int defaultValue) {
-        try { return Integer.parseInt(props.getProperty(key)); }
+        try { return Integer.parseInt(get(key)); }
         catch (Exception e) { return defaultValue; }
     }
 
     public long getLong(String key, long defaultValue) {
-        try { return Long.parseLong(props.getProperty(key)); }
+        try { return Long.parseLong(get(key)); }
         catch (Exception e) { return defaultValue; }
+    }
+
+    private String toEnvKey(String key) {
+        return key.toUpperCase().replace('.', '_').replace('-', '_');
     }
 
     // ── Convenience shortcuts ──────────────────────────────

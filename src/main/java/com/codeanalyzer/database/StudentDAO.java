@@ -79,10 +79,9 @@ public class StudentDAO {
     }
 
     public void updateLastCrawled(int studentId, LocalDateTime time) {
-        String sql = "UPDATE students SET last_crawled_at=? WHERE id=?";
+        String sql = "UPDATE students SET last_crawled_at=NOW() WHERE id=?";
         try (PreparedStatement ps = conn().prepareStatement(sql)) {
-            ps.setTimestamp(1, Timestamp.valueOf(time));
-            ps.setInt(2, studentId);
+            ps.setInt(1, studentId);
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("[StudentDAO] updateLastCrawled error: " + e.getMessage());
