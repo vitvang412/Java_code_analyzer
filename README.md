@@ -23,6 +23,8 @@ gemini.api.key=YOUR_GEMINI_API_KEY
 chrome.profile.path=C:/Users/YOUR_USER/AppData/Local/CodeAnalyzer_Chrome
 ```
 
+Co the dat bien moi truong `DB_PASSWORD`, `GEMINI_API_KEY` va `CHROME_PROFILE_PATH` de chay local ma khong can ghi secret vao file cau hinh.
+
 Chu y: chuong trinh khong tu tao database/table. Hay tao database va cac bang truoc khi chay app.
 
 ## Chay chuong trinh

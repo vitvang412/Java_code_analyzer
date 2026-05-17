@@ -40,13 +40,30 @@ public class CodeAnalyzer {
               "complexity_estimate": chuỗi – Độ phức tạp thời gian + không gian (ví dụ "O(N log N) time, O(N) space").
 
             === ĐÁNH GIÁ AI USAGE (0–10) ===
+              Mục tiêu là ước lượng mức độ nghi ngờ dùng AI, KHÔNG được kết luận chắc chắn nếu chỉ dựa vào cảm giác.
+              Hãy chấm điểm theo nguyên tắc bảo thủ: thiếu bằng chứng mạnh thì chọn điểm thấp hoặc trung bình thấp.
+
+              Các dấu hiệu KHÔNG tự động xem là AI trong lập trình thi đấu:
+                - Dùng template cá nhân dài: #include<bits/stdc++.h>, macro, typedef, fast I/O, buffer thủ công.
+                - Tên biến/hàm rất ngắn, khó đọc, viết tắt lạ, style "code golf" hoặc competitive programming.
+                - Code ít hoặc không có comment.
+                - Lời giải ngắn, công thức đơn giản, vòng lặp trực tiếp.
+                - Copy/paste trùng cả file, lặp main/include, lỗi biên dịch do dán nhầm: đây thường là lỗi thao tác, không phải bằng chứng AI.
+
+              Dấu hiệu làm TĂNG nghi ngờ AI chỉ khi xuất hiện rõ ràng trong chính mã nguồn:
+                - Comment/docstring giải thích từng bước quá đầy đủ, văn phong đều và giống tutorial.
+                - Tên biến/hàm rất gợi nghĩa một cách nhất quán trong toàn bộ bài, khác hẳn phong cách CP thông thường.
+                - Cấu trúc quá "sạch", chia hàm/lớp nhiều hơn mức cần thiết cho bài đơn giản.
+                - Có nhiều đoạn kiểm tra lỗi, xử lý edge case, abstraction hoặc mô tả thuật toán kiểu sách giáo khoa nhưng không cần thiết.
+                - Style nhất quán tuyệt đối, không có dấu vết template cá nhân, không có lỗi thao tác, không có biến viết tắt.
+
               "ai_usage_score": số nguyên 0–10:
-                0–2  = Tự viết rõ ràng: code thô, tên biến cộc lốc, debug nhiều, logic không nhất quán.
-                3–4  = Chủ yếu tự viết: có style riêng nhưng cũng tham khảo tài liệu.
-                5–6  = Trung bình: code khá sạch nhưng vẫn có dấu vết cá nhân.
-                7–8  = Có dấu hiệu AI mạnh: comment tiếng Anh hoàn hảo, tên hàm quá rõ nghĩa, cấu trúc template điển hình.
-                9–10 = Gần chắc AI tạo: quá hoàn hảo, over-engineered, mọi hàm đều có docstring, style nhất quán tuyệt đối.
-              "ai_usage_reason": chuỗi tiếng Việt CHI TIẾT (3–5 câu) giải thích bằng chứng cụ thể: style code, comment, naming, logic pattern, điểm bất thường.
+                0–2  = Rất có khả năng tự viết: template CP cá nhân, macro/fast I/O, tên ngắn/lạ, ít comment, có lỗi dán/cẩu thả hoặc style không đồng nhất.
+                3–4  = Chủ yếu tự viết: code tương đối sạch nhưng vẫn có nhiều dấu vết cá nhân hoặc phong cách thi đấu.
+                5–6  = Không chắc: có vài dấu hiệu AI nhẹ, nhưng bằng chứng chưa đủ mạnh để kết luận cao.
+                7–8  = Nghi dùng AI cao: có nhiều bằng chứng cụ thể như comment/tutorial, naming rất đều, cấu trúc quá chuẩn so với bài.
+                9–10 = Gần chắc AI tạo: quá hoàn hảo, over-engineered, docstring/comment đầy đủ bất thường, style giống mẫu sinh bởi AI từ đầu đến cuối.
+              "ai_usage_reason": chuỗi tiếng Việt CHI TIẾT (3–5 câu) giải thích bằng chứng cụ thể. Phải nêu cả bằng chứng ủng hộ và bằng chứng bác bỏ AI nếu có. Nếu điểm >= 7, phải chỉ ra ít nhất 2 bằng chứng mạnh; nếu không có thì giảm điểm.
 
             === CHẤT LƯỢNG CODE ===
               "code_quality": số nguyên 1–10 – chất lượng tổng thể (độ rõ ràng, tổ chức code, tránh trùng lặp).
@@ -56,7 +73,7 @@ public class CodeAnalyzer {
             === NHẬN XÉT CHI TIẾT ===
               "strengths": mảng chuỗi tiếng Việt – Tối đa 3 điểm mạnh cụ thể của code (kỹ thuật, hiệu quả, logic).
               "weaknesses": mảng chuỗi tiếng Việt – Tối đa 3 điểm yếu hoặc vấn đề tiềm ẩn.
-              "ai_evidence": mảng chuỗi tiếng Việt – Các bằng chứng cụ thể ủng hộ (hoặc bác bỏ) giả thuyết AI, ví dụ ["Biến tạm được đặt tên rất gợi nghĩa (leftBound, rightBound)", "Comment giải thích từng bước rất chi tiết"].
+              "ai_evidence": mảng chuỗi tiếng Việt – Các bằng chứng cụ thể ủng hộ hoặc bác bỏ giả thuyết AI. Với code CP template/macro/tên ngắn, hãy ghi rõ đây là dấu vết cá nhân làm giảm nghi ngờ AI.
 
             === TÓM TẮT ===
               "summary": 2–3 câu tiếng Việt tóm tắt: hướng giải, độ phức tạp, và nhận định chung về code.
